@@ -3,6 +3,8 @@ import logging
 import call
 import queue
 import cdr
+import time
+from contextlib import contextmanager
 
 INCOMING_NAME = "incoming"
 INCOMING_NUM_THREAD = 30
@@ -13,7 +15,32 @@ CDR_NUM_THREAD = 50
 
 TIME_MULTIPLIER = 1000.0
 
+now = lambda: int(round(time.time() * 1000))
+
 app = Flask(__name__)
+
+@contextmanager
+def timed(action, count=0, object="", objects=""):
+    start = now()
+    yield
+    duration = now()-start
+    message = action
+    if object and count:
+        objs = objects if objects else object + 's'
+        if count == 1:
+            obj = object
+        else:
+            obj = objs
+        speed = "at "
+        if duration == 0:
+            speed += "a gazillion {}/sec".format(objs)
+        else:
+            speed += "{} {}/sec".format(1000 * count / duration, obj)
+        message += " {} {} in {}ms {}".format(count, obj, duration, speed)
+    else:
+        message += " in {}ms".format(duration)
+
+    logging.info(message)
 
 
 @app.route('/')
@@ -25,7 +52,7 @@ def home():
         'outgoing queue': outgoing_queue_machine.stats(),
         'incoming calls': incoming_call_machine.stats(),
         'outgoing calls': outgoing_call_machine.stats(),
-        }
+    }
     return render_template('index.html', stats=stats)
 
 
@@ -38,8 +65,9 @@ def enqueue_inbound():
         except ValueError as e:
             print e.message
 
-    for i in range(count):
-        incoming_queue_machine.put({'foo': 'bar'})
+    with timed('enqueued', count, 'incoming message'):
+        for i in range(count):
+            incoming_queue_machine.put({'foo': 'bar'})
 
     return "{}".format(count)
 
@@ -53,8 +81,9 @@ def enqueue_outbound():
         except ValueError as e:
             print e.message
 
-    for i in range(count):
-        outgoing_queue_machine.put({'foo': 'bar'})
+    with timed('enqueued', count, 'outgoing message'):
+        for i in range(count):
+            outgoing_queue_machine.put({'foo': 'bar'})
 
     return "{}".format(count)
 
@@ -84,7 +113,6 @@ def cdr_queue_worker(q):
 
 
 if __name__ == '__main__':
-
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
