@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block title %}Error{% endblock %}
+{% block body %}
+<h1 class="red">HTTP 400 - Invalid Request</h1>
+<ul>
+    {% for error in errors %}
+        <li class="error">
+            <span>{{ error }}</span>
+        </li>
+    {% endfor %}
+</ul>
+{% endblock %}

@@ -21,11 +21,12 @@ now = lambda: int(round(time.time() * 1000))
 
 app = Flask(__name__)
 
+
 @contextmanager
 def timed(action, count=0, object="", objects=""):
     start = now()
     yield
-    duration = now()-start
+    duration = now() - start
     message = action
     if object and count:
         objs = objects if objects else object + 's'
@@ -66,20 +67,30 @@ def enqueue_inbound(count):
     return "{}".format(count)
 
 
-@app.route('/enqueue-outbound')
-def enqueue_outbound():
-    count = 1
-    if request.args.has_key('count'):
-        try:
-            count = int(request.args['count'])
-        except ValueError as e:
-            print e.message
+def is_int(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
 
-    with timed('enqueued', count, 'outgoing message'):
-        for i in range(count):
-            outgoing_queue_machine.put({'foo': 'bar'})
 
-    return "{}".format(count)
+@app.route('/outbound')
+def mock_outbound():
+    errors = []
+    if 'phone-number' not in request.args:
+        errors.append("missing 'phone-number' argument")
+    if 'vxml-url' not in request.args:
+        errors.append("missing 'vxml-url' argument")
+    if 'cdr-url' not in request.args:
+        errors.append("missing 'cdr-url' argument")
+    if len(errors) > 0:
+        return render_template('400.html', errors=errors), 400
+
+    outgoing_queue_machine.put({'phone-number': request.args['phone-number'], 'vxml-url': request.args['vxml-url'],
+                                'cdr-url': request.args['cdr-url']})
+
+    return "OK"
 
 
 def incoming_queue_worker(q):
@@ -94,7 +105,7 @@ def outgoing_queue_worker(q):
     while True:
         payload = q.get()
         logging.debug("Getting payload {} from '{}' queue".format(payload, OUTGOING_NAME))
-        outgoing_call_machine.call()
+        outgoing_call_machine.call(payload['phone-number'], payload['cdr-url'], payload['vxml-url'])
         q.task_done()
 
 
@@ -108,9 +119,17 @@ def cdr_queue_worker(q):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("num", help="number of inbound phone calls to mock", type=int)
+    parser.add_argument("-n", "--num", help="number of inbound phone calls to mock (must use with -u)", type=int)
+    parser.add_argument("-u", "--url", help="Motech URL to send the inbound phone call request to (must use with -n)")
+    # TODO add more arguments to vary the type of mock inbound call
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     args = parser.parse_args()
+
+    #debug
+    #print "args={}".format(args)
+
+    if (args.num is None and args.url is not None) or (args.num is not None and args.url is None):
+        parser.error('-n and -u must be given together')
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -126,6 +145,7 @@ if __name__ == '__main__':
     outgoing_call_machine = call.CallMachine(OUTGOING_NAME, TIME_MULTIPLIER, outgoing_call_types, cdr_queue_machine)
     outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker)
 
-    enqueue_inbound(args.num)
+    if args.num:
+        enqueue_inbound(args.num)
 
     app.run()

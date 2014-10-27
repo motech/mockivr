@@ -2,6 +2,7 @@ import threading
 import random
 import time
 import logging
+import urllib2
 
 
 class CallType:
@@ -42,7 +43,10 @@ class CallMachine:
         self.log_stats("")
         logging.debug("Created '{}' call machine".format(name))
 
-    def call(self):
+    def call(self, phone_number, cdr_url, vxml_url=None):
+        if vxml_url:
+            vxml = urllib2.urlopen(vxml_url).read()
+            logging.debug("Fetched the following VXML: {}".format(vxml))
         i = random.choice(self.likelihoods)
         call_type = self.types[i]
         call_duration = call_type.random_call_duration()
@@ -53,7 +57,7 @@ class CallMachine:
         time.sleep(call_duration / 1000.0 / self.time_multiplier)
         cdr = "{}-{}".format(call_type.name, call_count)
         logging.debug("The '{}' call machine made the following call: {}".format(self.name, cdr))
-        self.cdr_queue_machine.put(cdr)
+        self.cdr_queue_machine.put({'cdr': cdr, 'url': cdr_url})
 
     def stats(self):
         message = "{}-call: ".format(self.name)
