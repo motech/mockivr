@@ -108,10 +108,11 @@ def cdr_queue_worker(q):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("num", help="Number of inbound phone calls to mock", type=int)
+    parser.add_argument("num", help="number of inbound phone calls to mock", type=int)
+    parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
     cdr_machine = cdr.CDRMachine()
