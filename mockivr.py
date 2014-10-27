@@ -5,6 +5,8 @@ import queue
 import cdr
 import time
 from contextlib import contextmanager
+import argparse
+
 
 INCOMING_NAME = "incoming"
 INCOMING_NUM_THREAD = 30
@@ -56,15 +58,7 @@ def home():
     return render_template('index.html', stats=stats)
 
 
-@app.route('/enqueue-inbound')
-def enqueue_inbound():
-    count = 1
-    if request.args.has_key('count'):
-        try:
-            count = int(request.args['count'])
-        except ValueError as e:
-            print e.message
-
+def enqueue_inbound(count):
     with timed('enqueued', count, 'incoming message'):
         for i in range(count):
             incoming_queue_machine.put({'foo': 'bar'})
@@ -113,6 +107,10 @@ def cdr_queue_worker(q):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("num", help="Number of inbound phone calls to mock", type=int)
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
@@ -126,5 +124,7 @@ if __name__ == '__main__':
     outgoing_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
     outgoing_call_machine = call.CallMachine(OUTGOING_NAME, TIME_MULTIPLIER, outgoing_call_types, cdr_queue_machine)
     outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker)
+
+    enqueue_inbound(args.num)
 
     app.run()
