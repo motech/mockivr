@@ -1,7 +1,6 @@
 import threading
-import random
-import time
 import logging
+import urllib
 
 
 class CDRMachine:
@@ -13,13 +12,17 @@ class CDRMachine:
         self.log_stats("")
         logging.debug("Created the call detail record machine")
 
-    def send(self, cdr):
+    def send(self, payload):
         self.lock.acquire()
         cdr_id = self.count + 1
         self.count = cdr_id
         self.lock.release()
-        logging.debug("Sending cdr id {}: {}".format(cdr_id, cdr))
-        #TODO call motech to create a CDR
+
+        cdr = payload['cdr']
+        if 'providerCallId' not in cdr:
+            cdr['providerCallId'] = "CDR-{}".format(cdr_id)
+        logging.debug("Sending cdr: {}".format(cdr))
+        urllib.urlopen("{}?{}".format(payload['url'], urllib.urlencode(cdr))).read()
 
     def stats(self):
         self.lock.acquire()

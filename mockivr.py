@@ -87,10 +87,17 @@ def mock_outbound():
     if len(errors) > 0:
         return render_template('400.html', errors=errors), 400
 
-    outgoing_queue_machine.put({'phone-number': request.args['phone-number'], 'vxml-url': request.args['vxml-url'],
-                                'cdr-url': request.args['cdr-url']})
+    payload = {
+        'phone-number': request.args['phone-number'],
+        'vxml-url': request.args['vxml-url'],
+        'cdr-url': request.args['cdr-url']
+    }
+    outgoing_queue_machine.put(payload)
 
-    return "OK"
+    if args.verbose:
+        return str(payload)
+    else:
+        return "OK"
 
 
 def incoming_queue_worker(q):
