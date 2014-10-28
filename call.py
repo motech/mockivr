@@ -15,14 +15,14 @@ class CallType:
     def random_call_duration(self):
         return random.randrange(self.min_duration, self.max_duration)
 
-SUCCESS = CallType("success", 40, 100*1000, 140*1000)
-NO_ANSWER = CallType("no answer", 30, 10*1000, 30*1000)
-PHONE_OFF = CallType("phone off", 15, 1000/2, 2*1000)
-NOT_DELIVERED = CallType("not delivered", 15, 1000/2, 1*1000)
+SUCCESS = CallType("ANSWERED", 40, 100*1000, 140*1000)
+NO_ANSWER = CallType("NO_ANSWER", 30, 10*1000, 30*1000)
+PHONE_OFF = CallType("BUSY", 15, 1000/2, 2*1000)
+NOT_DELIVERED = CallType("FAILED", 15, 1000/2, 1*1000)
 
 class CallMachine:
 
-    def __init__(self, name, time_multiplier, types, cdr_queue_machine):
+    def __init__(self, name, cdr_url, template_url, time_multiplier, types, cdr_queue_machine):
         self.name = name
         self.time_multiplier = time_multiplier
         self.lock = threading.Lock()
@@ -30,6 +30,8 @@ class CallMachine:
         self.cdr_queue_machine = cdr_queue_machine
         self.likelihoods = []
         self.counts = []
+        self.cdr_url = cdr_url
+        self.template_url = template_url
 
         sum_of_likelihoods = 0
         for i in range(len(types)):
@@ -43,11 +45,11 @@ class CallMachine:
         self.log_stats("")
         logging.debug("Created '{}' call machine".format(name))
 
-
-    def call(self, phone_number, cdr_url, vxml_url=None):
-        if vxml_url:
-            vxml = urllib.urlopen(vxml_url).read()
-            logging.debug("Fetched the following VXML: {}".format(vxml))
+    def call(self, number_dict):
+        logging.debug("Calling {}".format(number_dict))
+        if self.template_url:
+            vxml = urllib.urlopen(self.template_url).read()
+            logging.debug("Fetched the following VXML template: {}".format(vxml))
         i = random.choice(self.likelihoods)
         call_type = self.types[i]
         call_duration = call_type.random_call_duration()
@@ -56,8 +58,8 @@ class CallMachine:
         self.counts[i] = call_count
         self.lock.release()
         time.sleep(call_duration / 1000.0 / self.time_multiplier)
-        cdr = {"callStatus": call_type.name, "to": phone_number}
-        self.cdr_queue_machine.put({'cdr': cdr, 'url': cdr_url})
+        cdr = dict({"callStatus": call_type.name}.items() + number_dict.items())
+        self.cdr_queue_machine.put({'cdr': cdr, 'url': self.cdr_url})
 
     def stats(self):
         message = "{}-call: ".format(self.name)

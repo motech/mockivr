@@ -62,7 +62,9 @@ def home():
 def enqueue_inbound(count):
     with timed('enqueued', count, 'incoming message'):
         for i in range(count):
-            incoming_queue_machine.put({'foo': 'bar'})
+            #todo randomize
+            phone_number = "12065551212"
+            incoming_queue_machine.put({'from': phone_number})
 
     return "{}".format(count)
 
@@ -78,19 +80,13 @@ def is_int(s):
 @app.route('/outbound')
 def mock_outbound():
     errors = []
-    if 'phone-number' not in request.args:
-        errors.append("missing 'phone-number' argument")
-    if 'vxml-url' not in request.args:
-        errors.append("missing 'vxml-url' argument")
-    if 'cdr-url' not in request.args:
-        errors.append("missing 'cdr-url' argument")
+    if 'to' not in request.args:
+        errors.append("missing 'to' argument")
     if len(errors) > 0:
         return render_template('400.html', errors=errors), 400
 
     payload = {
-        'phone-number': request.args['phone-number'],
-        'vxml-url': request.args['vxml-url'],
-        'cdr-url': request.args['cdr-url']
+        'to': request.args['to'],
     }
     outgoing_queue_machine.put(payload)
 
@@ -104,7 +100,7 @@ def incoming_queue_worker(q):
     while True:
         payload = q.get()
         logging.debug("Getting payload {} from '{}' queue".format(payload, INCOMING_NAME))
-        incoming_call_machine.call()
+        incoming_call_machine.call(payload)
         q.task_done()
 
 
@@ -112,7 +108,7 @@ def outgoing_queue_worker(q):
     while True:
         payload = q.get()
         logging.debug("Getting payload {} from '{}' queue".format(payload, OUTGOING_NAME))
-        outgoing_call_machine.call(payload['phone-number'], payload['cdr-url'], payload['vxml-url'])
+        outgoing_call_machine.call(payload)
         q.task_done()
 
 
@@ -126,17 +122,23 @@ def cdr_queue_worker(q):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--server", help="url of the Motech server",
+                        default="http://localhost:8080/motech-platform-server")
+    parser.add_argument("-c", "--config", help="name of the ivr config", default="config")
+    parser.add_argument("-t", "--template", help="name of the vxml template", default="template")
     parser.add_argument("-n", "--num", help="number of inbound phone calls to mock (must use with -u)", type=int)
-    parser.add_argument("-u", "--url", help="Motech URL to send the inbound phone call request to (must use with -n)")
     # TODO add more arguments to vary the type of mock inbound call
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     args = parser.parse_args()
 
     #debug
-    #print "args={}".format(args)
+    print "args={}".format(args)
 
-    if (args.num is None and args.url is not None) or (args.num is not None and args.url is None):
-        parser.error('-n and -u must be given together')
+    template_url = "{}/module/ivr/template/{}/{}".format(args.server, args.config, args.template)
+    cdr_url = "{}/module/ivr/status/{}".format(args.server, args.config)
+    if args.verbose:
+        print "VXML template URL: {}".format(template_url)
+        print "CDR template URL: {}".format(cdr_url)
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -145,11 +147,13 @@ if __name__ == '__main__':
     cdr_queue_machine = queue.QueueMachine(CDR_NAME, CDR_NUM_THREAD, cdr_queue_worker)
 
     incoming_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
-    incoming_call_machine = call.CallMachine(INCOMING_NAME, TIME_MULTIPLIER, incoming_call_types, cdr_queue_machine)
+    incoming_call_machine = call.CallMachine(INCOMING_NAME, cdr_url, template_url, TIME_MULTIPLIER, incoming_call_types,
+                                             cdr_queue_machine)
     incoming_queue_machine = queue.QueueMachine(INCOMING_NAME, INCOMING_NUM_THREAD, incoming_queue_worker)
 
     outgoing_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
-    outgoing_call_machine = call.CallMachine(OUTGOING_NAME, TIME_MULTIPLIER, outgoing_call_types, cdr_queue_machine)
+    outgoing_call_machine = call.CallMachine(OUTGOING_NAME, cdr_url, template_url, TIME_MULTIPLIER, outgoing_call_types,
+                                             cdr_queue_machine)
     outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker)
 
     if args.num:
