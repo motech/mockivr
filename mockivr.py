@@ -13,9 +13,9 @@ INCOMING_NUM_THREAD = 30
 OUTGOING_NAME = "outgoing"
 OUTGOING_NUM_THREAD = 300
 CDR_NAME = "cdr"
-CDR_NUM_THREAD = 50
+CDR_NUM_THREAD = 5
 
-TIME_MULTIPLIER = 1000.0
+TIME_MULTIPLIER = 1.0
 
 now = lambda: int(round(time.time() * 1000))
 
@@ -77,7 +77,7 @@ def is_int(s):
         return False
 
 
-@app.route('/outbound')
+@app.route('/out')
 def mock_outbound():
     errors = []
     if 'to' not in request.args:
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     #debug
-    print "args={}".format(args)
+    #print "args={}".format(args)
 
     template_url = "{}/module/ivr/template/{}/{}".format(args.server, args.config, args.template)
     cdr_url = "{}/module/ivr/status/{}".format(args.server, args.config)
@@ -142,19 +142,20 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.WARNING)
 
     cdr_machine = cdr.CDRMachine()
     cdr_queue_machine = queue.QueueMachine(CDR_NAME, CDR_NUM_THREAD, cdr_queue_worker)
 
     incoming_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
+    incoming_queue_machine = queue.QueueMachine(INCOMING_NAME, INCOMING_NUM_THREAD, incoming_queue_worker)
     incoming_call_machine = call.CallMachine(INCOMING_NAME, cdr_url, template_url, TIME_MULTIPLIER, incoming_call_types,
                                              cdr_queue_machine)
-    incoming_queue_machine = queue.QueueMachine(INCOMING_NAME, INCOMING_NUM_THREAD, incoming_queue_worker)
 
     outgoing_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
+    outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker)
     outgoing_call_machine = call.CallMachine(OUTGOING_NAME, cdr_url, template_url, TIME_MULTIPLIER, outgoing_call_types,
                                              cdr_queue_machine)
-    outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker)
 
     if args.num:
         enqueue_inbound(args.num)

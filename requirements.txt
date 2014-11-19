@@ -7,3 +7,4 @@ hiredis==0.1.5
 itsdangerous==0.24
 redis==2.10.3
 wsgiref==0.1.2
+influxdb==0.1.12

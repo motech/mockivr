@@ -2,6 +2,7 @@ import types
 import Queue
 import threading
 import logging
+from influxdb import client as influxdb
 
 
 class QueueMachine:
@@ -20,7 +21,12 @@ class QueueMachine:
             t.daemon = True
             t.start()
 
+        self.influxdb = influxdb.InfluxDBClient(database="motech")
+
+        print "influxdb = {}".format(self.influxdb)
+
         self.log_stats(-1)
+        self.log_db(-1)
         logging.debug("Created {}-queue, {} thread{}".format(name, num_workers, "s" if num_workers > 1 else ""))
 
     def put(self, payload):
@@ -29,6 +35,16 @@ class QueueMachine:
 
     def stats(self):
         return "{}-queue: {}".format(self.name, self.q.qsize())
+
+    def log_db(self, last_size):
+        size = self.q.qsize()
+        if last_size != size:
+            self.influxdb.write_points([{
+                    "name": self.name,
+                    "columns": ["value"],
+                    "points": [[size]],
+                }])
+        threading.Timer(1.0, self.log_db, (size,)).start()
 
     def log_stats(self, last_message):
         message = self.stats()
