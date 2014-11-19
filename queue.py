@@ -23,8 +23,6 @@ class QueueMachine:
 
         self.influxdb = influxdb.InfluxDBClient(database="motech")
 
-        print "influxdb = {}".format(self.influxdb)
-
         self.log_stats(-1)
         self.log_db(-1)
         logging.debug("Created {}-queue, {} thread{}".format(name, num_workers, "s" if num_workers > 1 else ""))
