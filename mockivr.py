@@ -160,4 +160,4 @@ if __name__ == '__main__':
     if args.num:
         enqueue_inbound(args.num)
 
-    app.run()
+    app.run(host='0.0.0.0')
