@@ -6,7 +6,7 @@ from influxdb import client as influxdb
 
 
 class QueueMachine:
-    def __init__(self, name, num_workers, worker):
+    def __init__(self, name, num_workers, worker, influxserver):
         if type(num_workers) != int:
             raise TypeError
         if num_workers < 1:
@@ -20,11 +20,11 @@ class QueueMachine:
             t = threading.Thread(target=worker, args=(self.q,))
             t.daemon = True
             t.start()
-
-        self.influxdb = influxdb.InfluxDBClient(database="motech")
+        if influxserver:
+            self.influxdb = influxdb.InfluxDBClient(database="motech")
+            self.log_db(-1)
 
         self.log_stats(-1)
-        self.log_db(-1)
         logging.debug("Created {}-queue, {} thread{}".format(name, num_workers, "s" if num_workers > 1 else ""))
 
     def put(self, payload):

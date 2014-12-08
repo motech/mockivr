@@ -124,6 +124,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--server", help="url of the Motech server",
                         default="http://localhost:8080/motech-platform-server")
+    parser.add_argument("-i", "--influx", help="url of the influx database server")
     parser.add_argument("-c", "--config", help="name of the ivr config", default="config")
     parser.add_argument("-t", "--template", help="name of the vxml template", default="template")
     parser.add_argument("-n", "--num", help="number of inbound phone calls to mock (must use with -u)", type=int)
@@ -145,15 +146,15 @@ if __name__ == '__main__':
     logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.WARNING)
 
     cdr_machine = cdr.CDRMachine()
-    cdr_queue_machine = queue.QueueMachine(CDR_NAME, CDR_NUM_THREAD, cdr_queue_worker)
+    cdr_queue_machine = queue.QueueMachine(CDR_NAME, CDR_NUM_THREAD, cdr_queue_worker, args.influx)
 
     incoming_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
-    incoming_queue_machine = queue.QueueMachine(INCOMING_NAME, INCOMING_NUM_THREAD, incoming_queue_worker)
+    incoming_queue_machine = queue.QueueMachine(INCOMING_NAME, INCOMING_NUM_THREAD, incoming_queue_worker, args.influx)
     incoming_call_machine = call.CallMachine(INCOMING_NAME, cdr_url, template_url, TIME_MULTIPLIER, incoming_call_types,
                                              cdr_queue_machine)
 
     outgoing_call_types = [call.SUCCESS, call.NO_ANSWER, call.PHONE_OFF, call.NOT_DELIVERED]
-    outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker)
+    outgoing_queue_machine = queue.QueueMachine(OUTGOING_NAME, OUTGOING_NUM_THREAD, outgoing_queue_worker, args.influx)
     outgoing_call_machine = call.CallMachine(OUTGOING_NAME, cdr_url, template_url, TIME_MULTIPLIER, outgoing_call_types,
                                              cdr_queue_machine)
 
